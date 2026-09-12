@@ -1,0 +1,57 @@
+{
+  "generated_at": "2026-06-30 23:09:02",
+  "algorithm": "Greedy Priority Scheduling \u2014 O(n log n)",
+  "slots": 5,
+  "schedule": [
+    {
+      "slot": 1,
+      "start_time": "00:00",
+      "end_time": "02:00",
+      "task_id": 1,
+      "task_title": "Fix critical login bug",
+      "urgency": 5,
+      "complexity": 2,
+      "priority_score": 11.5
+    },
+    {
+      "slot": 2,
+      "start_time": "02:00",
+      "end_time": "04:00",
+      "task_id": 5,
+      "task_title": "Optimise DB queries",
+      "urgency": 4,
+      "complexity": 3,
+      "priority_score": 8.5
+    },
+    {
+      "slot": 3,
+      "start_time": "04:00",
+      "end_time": "06:00",
+      "task_id": 2,
+      "task_title": "Deploy to production",
+      "urgency": 4,
+      "complexity": 4,
+      "priority_score": 8.0
+    },
+    {
+      "slot": 4,
+      "start_time": "06:00",
+      "end_time": "08:00",
+      "task_id": 7,
+      "task_title": "Code review PR #42",
+      "urgency": 3,
+      "complexity": 2,
+      "priority_score": 6.5
+    },
+    {
+      "slot": 5,
+      "start_time": "08:00",
+      "end_time": "10:00",
+      "task_id": 3,
+      "task_title": "Write unit tests",
+      "urgency": 3,
+      "complexity": 3,
+      "priority_score": 6.0
+    }
+  ]
+}

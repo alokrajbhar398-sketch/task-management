@@ -1,0 +1,8 @@
+id,title,description,status,created_at,assigned_to
+1,Design login screen,Create Figma mockups,done,2023-10-01 09:00:00,Alok Kumar Rajbhar
+2,Set up MySQL schema,Normalized DB with FK constraints,done,2023-10-05 10:30:00,Alok Kumar Rajbhar
+3,Build REST API endpoints,Auth + Task CRUD routes,done,2023-10-10 11:00:00,Alok Kumar Rajbhar
+4,React + TypeScript frontend,Dashboard with Kanban board,in-progress,2023-11-01 09:00:00,Alok Kumar Rajbhar
+5,Python reporting scripts,CSV export + scheduling algo,in-progress,2023-11-15 14:00:00,Alok Kumar Rajbhar
+6,Write unit tests,Cover all API endpoints,todo,2023-12-01 09:00:00,Alok Kumar Rajbhar
+7,Deploy to production,Docker + cloud hosting,todo,2023-12-10 09:00:00,Alok Kumar Rajbhar
