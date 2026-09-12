@@ -1,6 +1,6 @@
 # TaskFlow
 
-TaskFlow is a collaborative task-management application with a React frontend and a TypeScript/Express backend. It supports user registration, authentication, task creation, task status updates, role-based task deletion, and report endpoints.
+TaskFlow is a collaborative task-management application with a React frontend and a TypeScript/Express backend. It supports user registration, authentication, task creation and editing, due-date reminders, task priorities, team assignment, search/filter/sort controls, task status updates, role-based task deletion, and report endpoints.
 
 ## Technology stack
 
@@ -102,10 +102,12 @@ npm run preview  # Preview the production build
 | --- | --- | --- |
 | `POST` | `/api/auth/register` | Register a user |
 | `POST` | `/api/auth/login` | Authenticate and return a JWT |
+| `GET` | `/api/auth/users` | List team members for task assignment |
 | `POST` | `/api/auth/refresh` | Refresh a JWT |
 | `GET` | `/api/tasks` | List tasks for the authenticated user |
-| `POST` | `/api/tasks` | Create a task |
+| `POST` | `/api/tasks` | Create a task with optional due date and priority |
 | `PATCH` | `/api/tasks/:id` | Update a task status |
+| `PUT` | `/api/tasks/:id` | Edit a task title, description, due date, and priority |
 | `DELETE` | `/api/tasks/:id` | Delete a task as an administrator |
 | `GET` | `/api/health` | Check API availability |
 

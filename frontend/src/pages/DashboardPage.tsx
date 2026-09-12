@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { taskApi } from '../services/api';
+import { authApi, taskApi } from '../services/api';
 import ReportsPage from './ReportsPage';
 import './DashboardPage.css';
 
@@ -10,6 +10,18 @@ interface Task {
   description: string;
   status: 'todo' | 'in-progress' | 'done';
   user_id: number;
+  due_date?: string | null;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  created_at?: string;
+  assignee_id?: number | null;
+  assignee_name?: string | null;
+}
+
+interface TeamUser {
+  id: number;
+  name: string;
+  email: string;
+  role?: string;
 }
 
 const COLUMNS: { key: Task['status']; label: string; color: string }[] = [
@@ -80,14 +92,27 @@ function getStatusInfo(pct: number): { className: string; label: string; tooltip
 const DashboardPage: React.FC = () => {
   const { user, token, logout } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [view, setView] = useState<View>('dashboard');
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [newDueDate, setNewDueDate] = useState('');
+  const [newPriority, setNewPriority] = useState<Task['priority']>('medium');
+  const [newAssigneeId, setNewAssigneeId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editPriority, setEditPriority] = useState<Task['priority']>('medium');
+  const [editAssigneeId, setEditAssigneeId] = useState<number | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [apiError, setApiError] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterPriority, setFilterPriority] = useState<string>('all');
+  const [sortTasksBy, setSortTasksBy] = useState<'newest' | 'oldest' | 'priority' | 'due-date'>('newest');
   const [searchQuery, setSearchQuery] = useState('');
   // Team state
   const [teamSort, setTeamSort] = useState<TeamSort>('name');
@@ -99,6 +124,8 @@ const DashboardPage: React.FC = () => {
     try {
       const data = await taskApi.getAll(token);
       setTasks(data.tasks || []);
+      const usersData = await authApi.getUsers(token);
+      setTeamUsers(usersData.users || []);
       setApiError('');
     } catch {
       setApiError('Cannot connect to backend. Start the server with npm run dev in the backend folder.');
@@ -122,9 +149,12 @@ const DashboardPage: React.FC = () => {
     e.preventDefault();
     if (!token || !newTitle.trim()) return;
     setCreating(true);
-    await taskApi.create(token, newTitle, newDesc);
+    await taskApi.create(token, newTitle, newDesc, newDueDate, newPriority, newAssigneeId);
     setNewTitle('');
     setNewDesc('');
+    setNewDueDate('');
+    setNewPriority('medium');
+    setNewAssigneeId(null);
     setShowModal(false);
     setCreating(false);
     fetchTasks();
@@ -134,6 +164,39 @@ const DashboardPage: React.FC = () => {
     if (!token) return;
     await taskApi.updateStatus(token, id, status);
     fetchTasks();
+  };
+
+  const openEditModal = (task: Task) => {
+    setEditingTask(task);
+    setEditTitle(task.title);
+    setEditDesc(task.description || '');
+    setEditDueDate(task.due_date ? toDateTimeLocal(task.due_date) : '');
+    setEditPriority(task.priority || 'medium');
+    setEditAssigneeId(task.assignee_id || null);
+  };
+
+  const closeEditModal = () => {
+    setEditingTask(null);
+    setEditTitle('');
+    setEditDesc('');
+    setEditDueDate('');
+    setEditPriority('medium');
+    setEditAssigneeId(null);
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !editingTask || !editTitle.trim()) return;
+    setSavingEdit(true);
+    const data = await taskApi.updateDetails(token, editingTask.id, editTitle, editDesc, editDueDate, editPriority, editAssigneeId);
+    if (data.message === 'Task updated') {
+      setSavingEdit(false);
+      closeEditModal();
+      await fetchTasks();
+    } else {
+      setApiError(data.message || 'Unable to update task.');
+      setSavingEdit(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -149,6 +212,21 @@ const DashboardPage: React.FC = () => {
     return 'Good evening';
   };
 
+  const isOverdue = (task: Task) => Boolean(task.due_date && task.status !== 'done' && new Date(task.due_date).getTime() < Date.now());
+  const formatDueDate = (dueDate?: string | null) => dueDate
+    ? new Date(dueDate).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+    : '';
+  const priorityLabel = (priority: Task['priority']) => priority.charAt(0).toUpperCase() + priority.slice(1);
+  const toDateTimeLocal = (dueDate: string) => {
+    const date = new Date(dueDate);
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+  };
+  const upcomingTasks = tasks
+    .filter(task => task.due_date && task.status !== 'done' && !isOverdue(task))
+    .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime())
+    .slice(0, 5);
+
   // Sorted team members (#6)
   const getSortedMembers = useCallback(() => {
     const members = [...TEAM_MEMBERS];
@@ -161,6 +239,7 @@ const DashboardPage: React.FC = () => {
           const pctB = b.done / Math.max(b.tasks, 1);
           return pctB - pctA;
         });
+
       case 'needs-attention':
         return members.sort((a, b) => {
           const pctA = a.done / Math.max(a.tasks, 1);
@@ -187,9 +266,25 @@ const DashboardPage: React.FC = () => {
 
   const filteredTasks = tasks.filter(t => {
     const matchStatus = filterStatus === 'all' || t.status === filterStatus;
+    const matchPriority = filterPriority === 'all' || t.priority === filterPriority;
     const matchSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         (t.description || '').toLowerCase().includes(searchQuery.toLowerCase());
-    return matchStatus && matchSearch;
+    return matchStatus && matchPriority && matchSearch;
+  });
+  const priorityRank: Record<Task['priority'], number> = { urgent: 4, high: 3, medium: 2, low: 1 };
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    if (sortTasksBy === 'priority') {
+      return priorityRank[b.priority || 'medium'] - priorityRank[a.priority || 'medium'];
+    }
+    if (sortTasksBy === 'due-date') {
+      if (!a.due_date && !b.due_date) return 0;
+      if (!a.due_date) return 1;
+      if (!b.due_date) return -1;
+      return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+    }
+    const aDate = a.created_at ? new Date(a.created_at).getTime() : a.id;
+    const bDate = b.created_at ? new Date(b.created_at).getTime() : b.id;
+    return sortTasksBy === 'newest' ? bDate - aDate : aDate - bDate;
   });
 
   // Aggregate team stats
@@ -231,6 +326,19 @@ const DashboardPage: React.FC = () => {
             </button>
           ))}
         </div>
+        <select className="priority-filter" value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
+          <option value="all">All priorities</option>
+          <option value="urgent">Urgent</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select className="priority-filter" value={sortTasksBy} onChange={e => setSortTasksBy(e.target.value as typeof sortTasksBy)}>
+          <option value="newest">Sort: Newest</option>
+          <option value="oldest">Sort: Oldest</option>
+          <option value="priority">Sort: Priority</option>
+          <option value="due-date">Sort: Due date</option>
+        </select>
       </div>
 
       {apiError && <div className="api-error-banner">⚠️ &nbsp;{apiError}</div>}
@@ -255,7 +363,7 @@ const DashboardPage: React.FC = () => {
       <div className="my-tasks-list">
         {loading ? (
           <div className="task-loading">Loading…</div>
-        ) : filteredTasks.length === 0 ? (
+        ) : sortedTasks.length === 0 ? (
           <div className="empty-state glass-card">
             <div className="empty-icon">📭</div>
             <h3>No tasks found</h3>
@@ -263,7 +371,7 @@ const DashboardPage: React.FC = () => {
             <button className="btn-primary" style={{ marginTop: '16px' }} onClick={() => setShowModal(true)}>+ Create Task</button>
           </div>
         ) : (
-          filteredTasks.map(task => {
+          sortedTasks.map(task => {
             const col = COLUMNS.find(c => c.key === task.status)!;
             return (
               <div key={task.id} className="task-row glass-card">
@@ -271,6 +379,15 @@ const DashboardPage: React.FC = () => {
                 <div className="task-row-body">
                   <p className="task-title">{task.title}</p>
                   {task.description && <p className="task-desc">{task.description}</p>}
+                  {task.due_date && (
+                    <span className={`due-date ${isOverdue(task) ? 'overdue' : ''}`}>
+                      {isOverdue(task) ? '⚠️ Overdue' : '⏰ Due'} {formatDueDate(task.due_date)}
+                    </span>
+                  )}
+                  <span className={`priority-badge priority-${task.priority || 'medium'}`}>
+                    {priorityLabel(task.priority || 'medium')} priority
+                  </span>
+                  {task.assignee_name && <span className="assignee-label">👤 {task.assignee_name}</span>}
                 </div>
                 <div className="task-row-badge" style={{ color: col.color, borderColor: col.color }}>
                   {col.label}
@@ -284,6 +401,7 @@ const DashboardPage: React.FC = () => {
                   <option value="in-progress">In Progress</option>
                   <option value="done">Done</option>
                 </select>
+                <button className="edit-btn" onClick={() => openEditModal(task)} title="Edit task">✎</button>
                 {user?.role === 'admin' && (
                   <button className="delete-btn" onClick={() => handleDelete(task.id)} title="Delete">🗑</button>
                 )}
@@ -499,11 +617,6 @@ const DashboardPage: React.FC = () => {
           })}
         </div>
 
-        {/* (#9) Note: Due-date field */}
-        {/* NOTE: No due_date column exists in the tasks table yet.
-            Once a migration adds `due_date DATE` to the tasks table,
-            Pending stats can show a red warning icon for overdue tasks.
-            This is a follow-up requiring: ALTER TABLE tasks ADD COLUMN due_date DATE DEFAULT NULL; */}
       </div>
     );
   };
@@ -540,6 +653,28 @@ const DashboardPage: React.FC = () => {
 
       {apiError && <div className="api-error-banner">⚠️ &nbsp;{apiError}</div>}
 
+      <section className="upcoming-panel glass-card">
+        <div className="upcoming-header">
+          <div>
+            <h2>⏰ Upcoming deadlines</h2>
+            <p>Keep an eye on your next five unfinished tasks.</p>
+          </div>
+          <span className="upcoming-count">{upcomingTasks.length}</span>
+        </div>
+        {upcomingTasks.length === 0 ? (
+          <p className="task-empty">No upcoming deadlines.</p>
+        ) : (
+          <div className="upcoming-list">
+            {upcomingTasks.map(task => (
+              <button key={task.id} className="upcoming-item" onClick={() => { setView('my-tasks'); setSearchQuery(task.title); }}>
+                <span className="upcoming-title">{task.title}</span>
+                <span className="due-date">⏰ {formatDueDate(task.due_date)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
       <div className="kanban-board">
         {COLUMNS.map(col => (
           <div key={col.key} className="kanban-col glass-card">
@@ -559,6 +694,15 @@ const DashboardPage: React.FC = () => {
                   <div key={task.id} className="task-card glass-card">
                     <p className="task-title">{task.title}</p>
                     {task.description && <p className="task-desc">{task.description}</p>}
+                    {task.due_date && (
+                      <span className={`due-date ${isOverdue(task) ? 'overdue' : ''}`}>
+                        {isOverdue(task) ? '⚠️ Overdue' : '⏰ Due'} {formatDueDate(task.due_date)}
+                      </span>
+                    )}
+                    <span className={`priority-badge priority-${task.priority || 'medium'}`}>
+                      {priorityLabel(task.priority || 'medium')} priority
+                    </span>
+                    {task.assignee_name && <span className="assignee-label">👤 {task.assignee_name}</span>}
                     <div className="task-actions">
                       <select
                         className="status-select"
@@ -569,6 +713,7 @@ const DashboardPage: React.FC = () => {
                         <option value="in-progress">In Progress</option>
                         <option value="done">Done</option>
                       </select>
+                      <button className="edit-btn" onClick={() => openEditModal(task)} title="Edit task">✎</button>
                       {user?.role === 'admin' && (
                         <button className="delete-btn" onClick={() => handleDelete(task.id)} title="Delete task">🗑</button>
                       )}
@@ -659,12 +804,99 @@ const DashboardPage: React.FC = () => {
                   onChange={e => setNewDesc(e.target.value)}
                 />
               </div>
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label htmlFor="task-assignee">Assign to</label>
+                <select id="task-assignee" value={newAssigneeId ?? ''} onChange={e => setNewAssigneeId(e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">Unassigned</option>
+                  {teamUsers.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label htmlFor="task-priority">Priority</label>
+                <select id="task-priority" value={newPriority} onChange={e => setNewPriority(e.target.value as Task['priority'])}>
+                  <option value="urgent">Urgent</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label htmlFor="edit-task-assignee">Assign to</label>
+                <select id="edit-task-assignee" value={editAssigneeId ?? ''} onChange={e => setEditAssigneeId(e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">Unassigned</option>
+                  {teamUsers.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label htmlFor="task-due-date">Due date (optional)</label>
+                <input
+                  id="task-due-date"
+                  type="datetime-local"
+                  value={newDueDate}
+                  onChange={e => setNewDueDate(e.target.value)}
+                />
+              </div>
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label htmlFor="edit-task-priority">Priority</label>
+                <select id="edit-task-priority" value={editPriority} onChange={e => setEditPriority(e.target.value as Task['priority'])}>
+                  <option value="urgent">Urgent</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button id="modal-cancel-btn" type="button" className="modal-cancel" onClick={() => setShowModal(false)}>
                   Cancel
                 </button>
                 <button id="modal-create-btn" type="submit" className="btn-primary" disabled={creating} style={{ flex: 1 }}>
                   {creating ? 'Creating…' : '+ Create Task'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingTask && (
+        <div className="modal-overlay" onClick={closeEditModal}>
+          <div className="modal glass-card" onClick={e => e.stopPropagation()}>
+            <h2 style={{ marginBottom: '24px' }}>Edit Task</h2>
+            <form onSubmit={handleEdit}>
+              <div className="form-group">
+                <label htmlFor="edit-task-title">Task Title *</label>
+                <input
+                  id="edit-task-title"
+                  type="text"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label htmlFor="edit-task-desc">Description (optional)</label>
+                <textarea
+                  id="edit-task-desc"
+                  rows={3}
+                  value={editDesc}
+                  onChange={e => setEditDesc(e.target.value)}
+                />
+              </div>
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label htmlFor="edit-task-due-date">Due date (optional)</label>
+                <input
+                  id="edit-task-due-date"
+                  type="datetime-local"
+                  value={editDueDate}
+                  onChange={e => setEditDueDate(e.target.value)}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                <button type="button" className="modal-cancel" onClick={closeEditModal} disabled={savingEdit}>
+                  Cancel
+                </button>
+                <button id="modal-save-btn" type="submit" className="btn-primary" disabled={savingEdit} style={{ flex: 1 }}>
+                  {savingEdit ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
             </form>

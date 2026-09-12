@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getTasks, createTask, updateTaskStatus, deleteTask } from '../controllers/taskController';
+import { getTasks, createTask, updateTaskStatus, updateTaskDetails, deleteTask } from '../controllers/taskController';
 import { authenticate, authorizeRole } from '../middleware/authMiddleware';
 
 const router = Router();
@@ -18,6 +18,11 @@ router.post('/', authenticate, createTask);
 // @desc    Update task status
 // @access  Private
 router.patch('/:id', authenticate, updateTaskStatus);
+
+// @route   PUT /api/tasks/:id
+// @desc    Update a task title and description
+// @access  Private (owner or admin)
+router.put('/:id', authenticate, updateTaskDetails);
 
 // @route   DELETE /api/tasks/:id
 // @desc    Delete a task (Admin only)

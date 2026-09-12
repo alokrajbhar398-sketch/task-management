@@ -6,6 +6,10 @@ const getHeaders = (token?: string | null) => ({
 });
 
 export const authApi = {
+  getUsers: async (token: string) => {
+    const res = await fetch(`${BASE_URL}/auth/users`, { headers: getHeaders(token) });
+    return res.json();
+  },
   register: async (name: string, email: string, password: string, role: string) => {
     const res = await fetch(`${BASE_URL}/auth/register`, {
       method: 'POST',
@@ -33,11 +37,11 @@ export const taskApi = {
     return res.json();
   },
 
-  create: async (token: string, title: string, description: string) => {
+  create: async (token: string, title: string, description: string, dueDate?: string, priority = 'medium', assigneeId?: number | null) => {
     const res = await fetch(`${BASE_URL}/tasks`, {
       method: 'POST',
       headers: getHeaders(token),
-      body: JSON.stringify({ title, description }),
+      body: JSON.stringify({ title, description, dueDate: dueDate || null, priority, assigneeId: assigneeId || null }),
     });
     return res.json();
   },
@@ -47,6 +51,15 @@ export const taskApi = {
       method: 'PATCH',
       headers: getHeaders(token),
       body: JSON.stringify({ status }),
+    });
+    return res.json();
+  },
+
+  updateDetails: async (token: string, id: number, title: string, description: string, dueDate?: string, priority = 'medium', assigneeId?: number | null) => {
+    const res = await fetch(`${BASE_URL}/tasks/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(token),
+      body: JSON.stringify({ title, description, dueDate: dueDate || null, priority, assigneeId: assigneeId || null }),
     });
     return res.json();
   },

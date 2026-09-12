@@ -12,6 +12,17 @@ export interface IUser {
 }
 
 export class UserModel {
+    static async findAll(): Promise<Array<Pick<IUser, 'id' | 'name' | 'email' | 'role'>>> {
+        if (!isDatabaseAvailable()) {
+            return getMemoryUsers().map(({ id, name, email, role }) => ({ id, name, email, role }));
+        }
+
+        const [rows] = await pool.query<RowDataPacket[]>(
+            'SELECT id, name, email, role FROM users ORDER BY name ASC'
+        );
+        return rows as Array<Pick<IUser, 'id' | 'name' | 'email' | 'role'>>;
+    }
+
     // Basic Table Creation
     static async createTable() {
         if (!isDatabaseAvailable()) {
