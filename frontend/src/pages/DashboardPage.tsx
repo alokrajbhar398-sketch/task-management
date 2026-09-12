@@ -17,6 +17,14 @@ interface Task {
   assignee_name?: string | null;
 }
 
+interface Attachment {
+  id: number;
+  task_id: number;
+  original_name: string;
+  mime_type: string;
+  size: number;
+}
+
 interface TeamUser {
   id: number;
   name: string;
@@ -93,6 +101,8 @@ const DashboardPage: React.FC = () => {
   const { user, token, logout } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
+  const [attachments, setAttachments] = useState<Record<number, Attachment[]>>({});
+  const [uploadingTaskId, setUploadingTaskId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [view, setView] = useState<View>('dashboard');
@@ -204,6 +214,51 @@ const DashboardPage: React.FC = () => {
     await taskApi.delete(token, id);
     fetchTasks();
   };
+
+  const loadAttachments = async (taskId: number) => {
+    if (!token) return;
+    const data = await taskApi.listAttachments(token, taskId);
+    setAttachments(current => ({ ...current, [taskId]: data.attachments || [] }));
+  };
+
+  const handleUpload = async (taskId: number, file: File | undefined) => {
+    if (!token || !file) return;
+    setUploadingTaskId(taskId);
+    const data = await taskApi.uploadAttachment(token, taskId, file);
+    setUploadingTaskId(null);
+    if (data.message === 'Attachment uploaded') await loadAttachments(taskId);
+    else setApiError(data.message || 'Unable to upload attachment.');
+  };
+
+  const handleDownload = async (id: number) => {
+    if (!token) return;
+    const result = await taskApi.downloadAttachment(token, id);
+    if (!result) {
+      setApiError('Unable to download attachment.');
+      return;
+    }
+    const url = URL.createObjectURL(result.blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = result.name.replace(/^attachment;\s*filename="?([^"]+)"?$/, '$1');
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const renderAttachments = (task: Task) => (
+    <div className="attachments">
+      <button className="attachment-toggle" onClick={() => loadAttachments(task.id)}>📎 Attachments ({attachments[task.id]?.length ?? '…'})</button>
+      {(attachments[task.id] || []).map(file => (
+        <button key={file.id} className="attachment-link" onClick={() => handleDownload(file.id)} title="Download attachment">
+          {file.original_name}
+        </button>
+      ))}
+      <label className="attachment-upload">
+        {uploadingTaskId === task.id ? 'Uploading…' : '+ Add file'}
+        <input type="file" hidden disabled={uploadingTaskId === task.id} onChange={e => handleUpload(task.id, e.target.files?.[0])} />
+      </label>
+    </div>
+  );
 
   const getGreeting = () => {
     const h = new Date().getHours();
@@ -388,6 +443,7 @@ const DashboardPage: React.FC = () => {
                     {priorityLabel(task.priority || 'medium')} priority
                   </span>
                   {task.assignee_name && <span className="assignee-label">👤 {task.assignee_name}</span>}
+                  {renderAttachments(task)}
                 </div>
                 <div className="task-row-badge" style={{ color: col.color, borderColor: col.color }}>
                   {col.label}
@@ -703,6 +759,7 @@ const DashboardPage: React.FC = () => {
                       {priorityLabel(task.priority || 'medium')} priority
                     </span>
                     {task.assignee_name && <span className="assignee-label">👤 {task.assignee_name}</span>}
+                    {renderAttachments(task)}
                     <div className="task-actions">
                       <select
                         className="status-select"

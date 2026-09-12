@@ -19,10 +19,23 @@ export type MemoryTask = {
   created_at: Date;
 };
 
+export type MemoryAttachment = {
+  id: number;
+  task_id: number;
+  user_id: number;
+  original_name: string;
+  stored_name: string;
+  mime_type: string;
+  size: number;
+  created_at: Date;
+};
+
 const memoryStore = {
   users: [] as MemoryUser[],
   tasks: [] as MemoryTask[],
+  attachments: [] as MemoryAttachment[],
 };
 
 export const getMemoryUsers = () => memoryStore.users;
 export const getMemoryTasks = () => memoryStore.tasks;
+export const getMemoryAttachments = () => memoryStore.attachments;

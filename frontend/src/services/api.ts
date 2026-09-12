@@ -30,6 +30,29 @@ export const authApi = {
 };
 
 export const taskApi = {
+  listAttachments: async (token: string, taskId: number) => {
+    const res = await fetch(`${BASE_URL}/attachments/task/${taskId}`, { headers: getHeaders(token) });
+    return res.json();
+  },
+  uploadAttachment: async (token: string, taskId: number, file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    const res = await fetch(`${BASE_URL}/attachments/task/${taskId}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body,
+    });
+    return res.json();
+  },
+  deleteAttachment: async (token: string, id: number) => {
+    const res = await fetch(`${BASE_URL}/attachments/${id}`, { method: 'DELETE', headers: getHeaders(token) });
+    return res.json();
+  },
+  downloadAttachment: async (token: string, id: number) => {
+    const res = await fetch(`${BASE_URL}/attachments/${id}/download`, { headers: getHeaders(token) });
+    if (!res.ok) return null;
+    return { blob: await res.blob(), name: res.headers.get('Content-Disposition') || 'attachment' };
+  },
   getAll: async (token: string) => {
     const res = await fetch(`${BASE_URL}/tasks`, {
       headers: getHeaders(token),
